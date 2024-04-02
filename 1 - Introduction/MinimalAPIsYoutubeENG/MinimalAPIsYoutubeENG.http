@@ -1,0 +1,10 @@
+@MinimalAPIsYoutubeENG_HostAddress = http://localhost:5275
+
+### WeatherForecast
+GET {{MinimalAPIsYoutubeENG_HostAddress}}/weatherforecast/
+Accept: application/json
+
+### Appsettings example - Message
+
+GET {{MinimalAPIsYoutubeENG_HostAddress}}/message/
+Accept: application/json
