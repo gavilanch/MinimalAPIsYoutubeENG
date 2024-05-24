@@ -1,0 +1,105 @@
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using MinimalAPIsYoutubeENG.Contexts;
+using MinimalAPIsYoutubeENG.Entities;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+options.UseSqlServer("name=defaultConnection"));
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline (middlewares)
+
+app.UseHttpsRedirection();
+
+var summaries = new[]
+{
+    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+};
+
+app.MapGet("/weatherforecast", () =>
+{
+    var forecast = Enumerable.Range(1, 10).Select(index =>
+        new WeatherForecast
+        (
+            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+            Random.Shared.Next(-20, 55),
+            summaries[Random.Shared.Next(summaries.Length)]
+        ))
+        .ToArray();
+    return forecast;
+});
+
+var message = builder.Configuration.GetValue<string>("message");
+app.MapGet("/message", () => message);
+
+app.MapGet("/people", async (ApplicationDbContext context) =>
+{
+    var people = await context.People.ToListAsync();
+    return TypedResults.Ok(people);
+});
+
+// /people/7
+app.MapGet("/people/{id:int}", async Task<Results<Ok<Person>, NotFound>> (int id,
+    ApplicationDbContext context) =>
+{
+    var person = await context.People.FirstOrDefaultAsync(p => p.Id == id);
+
+    if (person is null)
+    {
+        return TypedResults.NotFound();
+    }
+
+    return TypedResults.Ok(person);
+
+}).WithName("GetPerson");
+
+app.MapPost("/people", async (Person person, ApplicationDbContext context) =>
+{
+    context.Add(person);
+    await context.SaveChangesAsync();
+    return TypedResults.CreatedAtRoute(person, "GetPerson", new { id = person.Id });
+});
+
+app.MapPut("/people/{id:int}", async Task<Results<BadRequest<string>, NotFound, NoContent>>
+    (int id, Person person, ApplicationDbContext context) =>
+{
+    if (id != person.Id)
+    {
+        return TypedResults.BadRequest("The ids do not match");
+    }
+
+    var exists = await context.People.AnyAsync(p => p.Id == id);
+
+    if (!exists)
+    {
+        return TypedResults.NotFound();
+    }
+
+    context.Update(person);
+    await context.SaveChangesAsync();
+    return TypedResults.NoContent();
+});
+
+app.MapDelete("/people/{id:int}", async Task<Results<NotFound, NoContent>> (int id,
+    ApplicationDbContext context) =>
+{
+    var deletedRecords = await context.People.Where(p => p.Id == id).ExecuteDeleteAsync();
+
+    if (deletedRecords == 0)
+    {
+        return TypedResults.NotFound();
+    }
+
+    return TypedResults.NoContent();
+});
+
+app.Run();
+
+internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+{
+    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+}
